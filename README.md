@@ -16,12 +16,13 @@ An intelligent bot that generates and answers thought-provoking questions using 
 ## 🌟 Features
 
 - 🤔 Generates intelligent questions on various topics
-- 💡 Provides concise, accurate answers
-- 🎨 Beautiful colored console interface with ASCII art
-- 📝 Automatically saves question history
-- ⚡ Fast and efficient operation
-- 🔄 Prevents question repetition
-- 🛡️ Robust error handling
+- 💡 Provides detailed, accurate answers
+- 🎨 Beautiful colored console interface with emojis
+- 📝 Automatically saves question history in JSON format
+- ⚡ Fast and efficient operation with retry mechanism
+- 🔄 Smart question generation with templates
+- 🛡️ Robust error handling and SSL support
+- 🌈 Enhanced logging with colors and emojis
 
 ## 🚀 Installation
 
@@ -86,7 +87,7 @@ An intelligent bot that generates and answers thought-provoking questions using 
 python hyper.py
 ```
 
-## ⚙️ Configuration (Update If Required)
+## ⚙️ Configuration
 
 You can customize the bot's behavior by editing these variables in `hyper.py`:
 
@@ -95,13 +96,18 @@ You can customize the bot's behavior by editing these variables in `hyper.py`:
 DELAY_BETWEEN_QUESTIONS = 30
 
 # Maximum tokens for API responses
-MAX_TOKENS = 2048
+MAX_TOKENS = 512  # Optimized for concise responses
 
 # Temperature for response generation (0.0 to 1.0)
-TEMPERATURE = 0.7
+TEMPERATURE = 0.1  # Set for more focused responses
 
 # Top P for response generation (0.0 to 1.0)
 TOP_P = 0.9
+
+# API Configuration
+API_TIMEOUT = 60  # Seconds
+MAX_RETRIES = 3   # Number of retries for failed requests
+RETRY_DELAY = 5   # Seconds between retries
 
 # Available topics
 TOPICS = [
@@ -111,16 +117,19 @@ TOPICS = [
     "Social Issues", "Innovation"
 ]
 
-# Question types
+# Question types with templates
 QUESTION_TYPES = {
-    "analysis": "Analyze the implications of",
-    "prediction": "Predict the future of",
-    "comparison": "Compare and contrast",
-    "evaluation": "Evaluate the impact of",
-    "explanation": "Explain how",
-    "opinion": "Share your thoughts on",
-    "solution": "Propose a solution for",
-    "exploration": "Explore the possibilities of"
+    "analysis": [
+        "Analyze the impact of {topic} on society.",
+        "What are the key factors influencing {topic}?",
+        # More templates...
+    ],
+    "prediction": [
+        "What will be the future of {topic}?",
+        "How might {topic} change in the next decade?",
+        # More templates...
+    ],
+    # More question types...
 }
 ```
 
@@ -152,15 +161,20 @@ hyperbolic-bot/
    - Check your internet connection
 
 3. **Package Installation Failed**
+
    - Check your internet connection
    - Try running `pip install -r requirements.txt` manually
    - Make sure you have the latest pip version
+
+4. **SSL Certificate Issues**
+   - The bot automatically handles SSL certificate issues
+   - No action required from your side
 
 ### Getting Help
 
 If you encounter any issues:
 
-1. Check the error message in the console
+1. Check the error message in the console (now with helpful emojis!)
 2. Review the troubleshooting section
 3. Contact support on Telegram: [Looters Era](https://telegram.me/lootersera_th)
 
@@ -175,5 +189,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ---
 
 <div align="center">
-Made with ❤️ by [Ashu](https://github.com/Ashuxd-X)
+Made with ❤️ by <a href="https://github.com/Ashuxd-X">Ashu</a>
 </div>

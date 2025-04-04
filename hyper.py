@@ -25,15 +25,59 @@ import os
 import base64
 import hashlib
 from colorama import init, Fore, Style
+import urllib3
+
+# Disable SSL warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Initialize colorama for Windows support
 init()
 
+# Setup global logger
+logger = logging.getLogger('HyperBot')
+logger.setLevel(logging.INFO)
+
+# Create console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+
+# Custom formatter with colors
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter with colors"""
+    
+    def format(self, record):
+        # Add timestamp
+        record.timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Add colors based on log level
+        if record.levelno == logging.INFO:
+            color = Fore.GREEN
+        elif record.levelno == logging.ERROR:
+            color = Fore.RED
+        elif record.levelno == logging.WARNING:
+            color = Fore.YELLOW
+        else:
+            color = Fore.WHITE
+            
+        # Format the message
+        record.msg = f"{color}{record.msg}{Style.RESET_ALL}"
+        return super().format(record)
+
+# Create formatter
+formatter = ColoredFormatter(
+    f"{Fore.CYAN}%(timestamp)s{Style.RESET_ALL} | %(levelname)s | %(message)s",
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+console_handler.setFormatter(formatter)
+
+# Add handler to logger
+logger.addHandler(console_handler)
+
 # Hyperbolic API Configuration
-HYPERBOLIC_API_URL = "https://api.hyperbolic.xyz/v1/chat/completions"
+HYPERBOLIC_API_URL = "https://api.hyperbolic.xyz/v1/chat/completions"  # Updated to correct endpoint
 MODEL = "deepseek-ai/DeepSeek-V3-0324"      # Or specify the required model
-MAX_TOKENS = 2048
-TEMPERATURE = 0.7
+MAX_TOKENS = 512  # Updated to match documentation
+TEMPERATURE = 0.1  # Updated to match documentation
 TOP_P = 0.9
 DELAY_BETWEEN_QUESTIONS = 30  # delay between questions in seconds
 API_TIMEOUT = 60  # Increased timeout to 60 seconds
@@ -119,27 +163,6 @@ class Colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     END = '\033[0m'
-
-class ColoredFormatter(logging.Formatter):
-    """Custom formatter with colors"""
-    
-    def format(self, record):
-        # Add timestamp
-        record.timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Add colors based on log level
-        if record.levelno == logging.INFO:
-            color = Colors.GREEN
-        elif record.levelno == logging.ERROR:
-            color = Colors.RED
-        elif record.levelno == logging.WARNING:
-            color = Colors.YELLOW
-        else:
-            color = Colors.WHITE
-            
-        # Format the message
-        record.msg = f"{color}{record.msg}{Colors.END}"
-        return super().format(record)
 
 def setup_logger() -> logging.Logger:
     """Setup a logger with custom formatting"""
@@ -269,14 +292,20 @@ Make it more engaging but keep it short. Format: Just the enhanced question, not
         data = {
             "messages": [{"role": "user", "content": prompt}],
             "model": MODEL,
-            "max_tokens": 100,
-            "temperature": 0.8,
-            "top_p": 0.9
+            "max_tokens": MAX_TOKENS,
+            "temperature": TEMPERATURE,
+            "top_p": TOP_P
         }
         
         for attempt in range(MAX_RETRIES):
             try:
-                response = requests.post(HYPERBOLIC_API_URL, headers=headers, json=data, timeout=API_TIMEOUT)
+                response = requests.post(
+                    HYPERBOLIC_API_URL, 
+                    headers=headers, 
+                    json=data, 
+                    timeout=API_TIMEOUT,
+                    verify=False  # Disable SSL verification
+                )
                 response.raise_for_status()
                 json_response = response.json()
                 enhanced_question = json_response.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
@@ -311,121 +340,121 @@ Make it more engaging but keep it short. Format: Just the enhanced question, not
         return question  # Return the template question if API fails
 
 def get_response(question: str) -> str:
+    """Get response from Hyperbolic API"""
+    api_key = load_api_key()
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    data = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": "You are a helpful AI assistant that provides detailed and accurate answers."},
+            {"role": "user", "content": question}
+        ],
+        "max_tokens": MAX_TOKENS,
+        "temperature": TEMPERATURE,
+        "top_p": TOP_P
+    }
+    
     for attempt in range(MAX_RETRIES):
         try:
-            api_key = load_api_key()
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            }
-            data = {
-                "messages": [
-                    {"role": "system", "content": "You are a concise AI assistant. Always provide very short, 1-2 line answers. Be direct and to the point."},
-                    {"role": "user", "content": f"{question}\n\nProvide a very short, 1-2 line answer."}
-                ],
-                "model": MODEL,
-                "max_tokens": 100,  # Reduced from 2048 to encourage brevity
-                "temperature": TEMPERATURE,
-                "top_p": TOP_P
-            }
-            logger.info(f"Sending request to {Colors.CYAN}Hyperbolic API{Colors.END}")
-            response = requests.post(HYPERBOLIC_API_URL, headers=headers, json=data, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            json_response = response.json()
-            answer = json_response.get("choices", [{}])[0].get("message", {}).get("content", "No answer").strip()
+            response = requests.post(
+                HYPERBOLIC_API_URL,
+                headers=headers,
+                json=data,
+                timeout=API_TIMEOUT,
+                verify=False
+            )
             
-            # Clean up the answer to ensure it's short
-            if len(answer.split('\n')) > 2:
-                answer = answer.split('\n')[0] + " " + answer.split('\n')[1]
+            if response.status_code == 401:
+                logger.error(f"{Fore.RED}🔑 Invalid API key. Please check your key.txt file.{Style.RESET_ALL}")
+                raise ValueError("Invalid API key")
+            elif response.status_code == 404:
+                logger.error(f"{Fore.RED}🌐 API endpoint not found. Please check the API URL configuration.{Style.RESET_ALL}")
+                raise ValueError("API endpoint not found")
+            elif response.status_code != 200:
+                logger.error(f"{Fore.RED}⚠️ API request failed with status code {response.status_code}{Style.RESET_ALL}")
+                raise ValueError(f"API request failed: {response.text}")
             
-            return answer
-        except requests.Timeout:
+            response_data = response.json()
+            logger.info(f"{Fore.GREEN}✅ Answer received successfully{Style.RESET_ALL}")
+            return response_data["choices"][0]["message"]["content"]
+            
+        except requests.exceptions.RequestException as e:
             if attempt < MAX_RETRIES - 1:
-                logger.warning(f"Request timed out. Retrying in {RETRY_DELAY} seconds... (Attempt {attempt + 1}/{MAX_RETRIES})")
+                logger.warning(f"{Fore.YELLOW}🔄 Request failed, retrying in {RETRY_DELAY} seconds... ({attempt + 1}/{MAX_RETRIES}){Style.RESET_ALL}")
                 time.sleep(RETRY_DELAY)
             else:
-                logger.error("Request timed out after all retries")
+                logger.error(f"{Fore.RED}❌ Max retries exceeded: {str(e)}{Style.RESET_ALL}")
                 raise
-        except requests.RequestException as e:
-            if attempt < MAX_RETRIES - 1:
-                logger.warning(f"Request failed: {e}. Retrying in {RETRY_DELAY} seconds... (Attempt {attempt + 1}/{MAX_RETRIES})")
-                time.sleep(RETRY_DELAY)
-            else:
-                logger.error(f"Request failed after all retries: {e}")
-                raise
-        except Exception as e:
-            logger.error(f"Unexpected error in API request: {e}")
-            raise
 
-def save_question_history(question: str, answer: str, topic: str, question_type: str):
-    """Save question and answer to history file"""
+def load_question_history() -> List[dict]:
+    """Load question history from JSON file"""
     try:
-        history = []
         if os.path.exists('question_history.json'):
             with open('question_history.json', 'r', encoding='utf-8') as f:
-                history = json.load(f)
-        
-        history.append({
-            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'topic': topic,
-            'question_type': question_type,
-            'question': question,
-            'answer': answer
-        })
-        
+                return json.load(f)
+        return []
+    except Exception as e:
+        logger.error(f"{Fore.RED}📚 Error loading question history: {e}{Style.RESET_ALL}")
+        return []
+
+def save_question_history(history: List[dict]):
+    """Save question history to JSON file"""
+    try:
         with open('question_history.json', 'w', encoding='utf-8') as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
-            
-        logger.info(f"Saved question to {Colors.CYAN}question_history.json{Colors.END}")
     except Exception as e:
-        logger.error(f"Error saving question history: {e}")
+        logger.error(f"{Fore.RED}💾 Error saving question history: {e}{Style.RESET_ALL}")
 
 def main():
-    # Print banner
+    """Main function to run the bot"""
     print_banner()
     
-    question_count = 0
-    used_combinations = set()  # Track used topic-type combinations
-    
-    while True:
-        # Generate a new question
-        topic = random.choice(TOPICS)
-        question_type = random.choice(list(QUESTION_TYPES.keys()))
+    try:
+        # Load or create question history
+        question_history = load_question_history()
         
-        # Check if this combination has been used recently
-        combination = (topic, question_type)
-        if combination in used_combinations:
-            # Try to find an unused combination
-            available_combinations = [(t, qt) for t in TOPICS for qt in QUESTION_TYPES.keys()]
-            available_combinations = [c for c in available_combinations if c not in used_combinations]
-            
-            if available_combinations:
-                combination = random.choice(available_combinations)
-                topic, question_type = combination
-            else:
-                # Reset used combinations if all have been used
-                used_combinations.clear()
-        
-        used_combinations.add(combination)
-        
-        logger.info(f"{Colors.BOLD}Generating {Colors.CYAN}{question_type}{Colors.END} question about {Colors.CYAN}{topic}{Colors.END}")
-        
-        question = generate_question(topic, question_type)
-        question_count += 1
-        
-        logger.info(f"{Colors.BOLD}Question #{question_count}:{Colors.END} {question}")
-        try:
-            answer = get_response(question)
-            logger.info(f"{Colors.GREEN}Answer:{Colors.END} {answer}")
-            
-            # Save to history
-            save_question_history(question, answer, topic, question_type)
-        except Exception as e:
-            logger.error(f"Error getting response for question: {question}\n{e}")
-        
-        logger.info(f"Waiting {Colors.YELLOW}{DELAY_BETWEEN_QUESTIONS}{Colors.END} seconds before next question...")
-        time.sleep(DELAY_BETWEEN_QUESTIONS)
+        while True:
+            try:
+                # Select random topic and question type
+                topic = random.choice(TOPICS)
+                question_type = random.choice(list(QUESTION_TYPES.keys()))
+                
+                logger.info(f"{Fore.CYAN}🤔 Generating {Fore.YELLOW}{question_type}{Fore.CYAN} question about {Fore.YELLOW}{topic}{Style.RESET_ALL}")
+                question = generate_question(topic, question_type)
+                
+                if question:
+                    logger.info(f"{Fore.CYAN}❓ Question:{Style.RESET_ALL} {Fore.WHITE}{question}{Style.RESET_ALL}")
+                    answer = get_response(question)
+                    
+                    # Save to history
+                    question_history.append({
+                        "question": question,
+                        "answer": answer,
+                        "topic": topic,
+                        "type": question_type,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    save_question_history(question_history)
+                    
+                    logger.info(f"{Fore.GREEN}✅ Answer received and saved to history{Style.RESET_ALL}")
+                    logger.info(f"{Fore.CYAN}⏳ Waiting {Fore.YELLOW}{DELAY_BETWEEN_QUESTIONS}{Fore.CYAN} seconds before next question...{Style.RESET_ALL}")
+                    time.sleep(DELAY_BETWEEN_QUESTIONS)
+                    
+            except KeyboardInterrupt:
+                logger.info(f"{Fore.YELLOW}👋 Bot stopped by user{Style.RESET_ALL}")
+                break
+            except Exception as e:
+                logger.error(f"{Fore.RED}❌ Error in main loop: {e}{Style.RESET_ALL}")
+                time.sleep(DELAY_BETWEEN_QUESTIONS)
+                
+    except Exception as e:
+        logger.error(f"{Fore.RED}💥 Fatal error: {e}{Style.RESET_ALL}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    logger = setup_logger()
     main()
